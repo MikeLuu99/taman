@@ -1,94 +1,48 @@
-# Taman
+# Taman (fork)
 
-🌱 **Taman** is a TUI Pomodoro productivity app where your focus sessions literally grow plants! Built in Rust with Ratatui, it combines the Pomodoro technique with gamification — complete focus sessions to evolve your plant from a 🌰 seed to a 🪴 fully grown plant - all in your terminal!
+This is a personal fork of [taman](https://github.com/harmoneer/taman) by harmoneer, adding a **Todos** tab and a **Garden** collection tab on top of the original app.
 
-[![Buy Me a Coffee at ko-fi.com](https://plok.sh/kofi.png)](https://ko-fi.com/A0A81PC8ZA)
+## What's added in this fork
 
-## Features
-[![Taman Features](https://github.com/harmoneer/taman/blob/master/screenshots/tamanv0.1.3.gif?raw=true)]
+### ✅ Todos tab (`2`)
+A keyboard-driven task list living alongside the Pomodoro timer.
 
-- **Pomodoro Timer**: Configurable focus, short break, and long break durations
-- **Plant Growth**: Emoji-based plants that grow with each completed session
-- **Auto-Run Queue**: Queue multiple sessions to run automatically
-- **Statistics & Charts**: Daily metrics with bar charts and pie charts for productivity insights
-- **Themes**: Multiple color themes (System, Rose Pine Dawn, Rose Pine, Gruvbox Dark/Light, Solarized Dark/Light, Nord, Tokyo Night, Monokai, Vesper, Everforest, Catppuccin Latte/Frappé/Macchiato/Mocha)
-- **Persistence**: JSON-based saving of progress, stats, and settings
-- **Keyboard Navigation**: Fully navigable with keyboard only
-- **Streak Tracking**: Current and longest daily streaks
+- **Add** a todo with `n`, type the title, confirm with Enter
+- **Edit** a todo in place with `e`
+- **Toggle done** with Enter — marks the task complete and plants a flower in your Garden
+- **Delete** with Backspace / Delete
+- Navigate with ↑/↓
 
-## Installation
+### 🌺 Garden tab (`3`)
+A growing collection of everything you've completed.
 
-### From Source
+- Each **completed todo** adds a flower (🌸🌺🌻🌹🌷🪷🌼💐, cycling as you complete more)
+- Each **fully grown plant** from the Plant tab also appears here as 🪴
+- Items are displayed as an emoji grid, scrollable with ↑/↓
+
+## Tab layout (this fork)
+
+| Key | Tab |
+|-----|-----|
+| `1` | ⏳ Timer |
+| `2` | ✅ Todos |
+| `3` | 🌺 Garden |
+| `4` | 🌱 Plant |
+| `5` | 📊 Stats |
+| `6` | ⚙️ Settings |
+
+## Running from source
 
 ```bash
-git clone https://github.com/yourusername/taman.git
+git clone <this-repo>
 cd taman
-cargo build --release
-./target/release/taman
+cargo run
+# or for a release build:
+cargo build --release && ./target/release/taman
 ```
 
-### From Crates.io
+Requires Rust 1.70+ and a terminal with Unicode support.
 
-```bash
-cargo install taman
-taman
-```
+## Original project
 
-## Usage
-
-Taman is a terminal user interface (TUI) app. Run it and use the following keys:
-
-- **1/2/3/4**: Switch between tabs (Timer, Plant, Stats, Settings)
-- **Arrow Keys**: Navigate within tabs
-- **Enter**: Select/activate
-- **Space**: Start/pause timer
-- **s**: Stop timer
-- **q**: Quit
-
-### Tabs
-
-1. **⏳ Timer**: Select session type with arrows, start with Space, stop with s, manage auto-run queue
-2. **🌿 Plant**: View current plant stage and progress
-3. **📊 Stats**: Browse daily metrics and charts with arrow navigation
-4. **⚙️ Settings**: Adjust durations and change themes
-
-## Configuration
-
-Settings are saved automatically to `~/.config/taman/data.json` (or equivalent on your OS).
-
-- Focus duration (default: 25 minutes)
-- Short break (default: 5 minutes)
-- Long break (default: 15 minutes)
-- Theme selection
-
-## Dependencies
-
-- Rust 1.70+
-- Terminal with Unicode support
-
-## Libraries Used
-
-- [ratatui](https://github.com/ratatui-org/ratatui) - TUI framework
-- [tui-big-text](https://github.com/joshka/tui-big-text) - Large text displays
-- [tui-piechart](https://github.com/ImJeremyHe/tui-piechart) - Pie charts
-- [crossterm](https://github.com/crossterm-rs/crossterm) - Terminal backend
-- [serde](https://github.com/serde-rs/serde) - Serialization
-
-## Contributing
-
-Contributions welcome! Please open issues or pull requests on GitHub.
-
-## License
-
-MIT License
-
-## Devlogs
-
-- [Devlog #1](blog/first.md) - Initial concepts and architecture
-- [Devlog #2](blog/second.md) - Implementation progress to working prototype
-- [Devlog #3](blog/third.md) - Crates.io release and community launch
-- [Devlog #4](blog/fourth.md) - Expanded theme support
-
----
-
-🌿 Grow your focus, grow your garden.
+All original features (Pomodoro timer, plant growth, statistics, themes, streak tracking) are by [harmoneer](https://github.com/harmoneer/taman). Check out the original repo and support the author there.
