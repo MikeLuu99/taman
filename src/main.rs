@@ -21,7 +21,7 @@ use ratatui::text::Line;
 
 use crate::app::{App, Tab};
 use crate::input::handle_key;
-use crate::ui::{plant_ui, stats_ui, settings_ui, timer_ui, todos_ui};
+use crate::ui::{garden_ui, plant_ui, stats_ui, settings_ui, timer_ui, todos_ui};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
@@ -51,17 +51,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Header: Tabs
             let tabs = ratatui::widgets::Tabs::new(vec![
                 Line::from("⏳ Timer [1]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
-                Line::from("🌱 Plant [2]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
-                Line::from("📊 Stats [3]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
-                Line::from("⚙️ Settings [4]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
-                Line::from("✅ Todos [5]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
+                Line::from("✅ Todos [2]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
+                Line::from("🌺 Garden [3]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
+                Line::from("🌱 Plant [4]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
+                Line::from("📊 Stats [5]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
+                Line::from("⚙️ Settings [6]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
             ])
             .select(match app.tab {
                 Tab::Timer => 0,
-                Tab::Plant => 1,
-                Tab::Stats => 2,
-                Tab::Settings => 3,
-                Tab::Todos => 4,
+                Tab::Todos => 1,
+                Tab::Garden => 2,
+                Tab::Plant => 3,
+                Tab::Stats => 4,
+                Tab::Settings => 5,
             })
             .style(ratatui::style::Style::default().fg(app.theme.tabs))
             .highlight_style(ratatui::style::Style::default().fg(app.theme.highlight).add_modifier(ratatui::style::Modifier::BOLD));
@@ -74,6 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Tab::Stats => stats_ui::draw_stats(f, &app, chunks[1]),
                 Tab::Settings => settings_ui::draw_settings(f, &app, chunks[1]),
                 Tab::Todos => todos_ui::draw_todos(f, &mut app, chunks[1]),
+                Tab::Garden => garden_ui::draw_garden(f, &mut app, chunks[1]),
             }
 
             // Footer: Status and hints
@@ -82,7 +85,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Tab::Plant => "Quit [Q]",
                 Tab::Stats => "Quit [Q]",
                 Tab::Settings => "Switch Blocks [←/→] | Select/Adjust [↑/↓] | Quit [Q]",
-                Tab::Todos => "Add [N] | Toggle Done [Enter] | Delete [Del] | Navigate [↑/↓] | Quit [Q]",
+                Tab::Todos => "Add [N] | Edit [E] | Toggle Done [Enter] | Delete [Del] | Navigate [↑/↓] | Quit [Q]",
+                Tab::Garden => "Scroll [↑/↓] | Quit [Q]",
             };
             let footer = ratatui::widgets::Paragraph::new(footer_text)
                 .style(ratatui::style::Style::default().fg(app.theme.secondary_text));

@@ -62,9 +62,10 @@ pub fn draw_todos(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Input bar (only when editing)
     if app.todo_editing {
+        let bar_title = if app.todo_editing_index.is_some() { " Edit Todo " } else { " New Todo " };
         let input_block = Block::default()
             .title_top(
-                Line::from(" New Todo ")
+                Line::from(bar_title)
                     .style(Style::default().fg(app.theme.highlight))
                     .centered(),
             )

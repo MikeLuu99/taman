@@ -1,5 +1,3 @@
-use chrono::Local;
-use crossterm::event::{KeyCode, KeyEvent};
 use crate::garden::Garden;
 use crate::input::InputAction;
 use crate::plant::Plant;
@@ -7,15 +5,18 @@ use crate::storage::{load_data, save_data, Data, Settings, Statistics};
 use crate::theme::{Theme, ThemeVariant};
 use crate::timer::{SessionType, Timer};
 use crate::todo::Todo;
+use chrono::Local;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::{ListState, ScrollbarState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Timer,
+    Todos,
+    Garden,
     Plant,
     Stats,
     Settings,
-    Todos,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,7 +48,10 @@ pub struct App {
     pub todos_selected: usize,
     pub todo_input: String,
     pub todo_editing: bool,
+    pub todo_editing_index: Option<usize>,
     pub todo_next_id: u64,
+    // Garden
+    pub garden_scroll: usize,
 }
 
 impl App {
@@ -72,6 +76,7 @@ impl App {
         let theme = Theme::new(settings.theme);
         let todos = data.todos.clone();
         let todo_next_id = todos.iter().map(|t| t.id + 1).max().unwrap_or(0);
+        garden.entries = data.garden_entries.clone();
 
         App {
             tab: Tab::Timer,
@@ -81,38 +86,50 @@ impl App {
             settings,
             statistics,
             theme,
-             timer_selected_session: 0,
-             timer_selected_auto: 0,
-             settings_selected: 0,
-             stats_selected: 0,
-             focus: Focus::Left,
-             should_quit: false,
-             timer_auto_list_state: ListState::default(),
-             timer_auto_scrollbar_state: ScrollbarState::new(1000),
-             todos,
-             todos_selected: 0,
-             todo_input: String::new(),
-             todo_editing: false,
-             todo_next_id,
+            timer_selected_session: 0,
+            timer_selected_auto: 0,
+            settings_selected: 0,
+            stats_selected: 0,
+            focus: Focus::Left,
+            should_quit: false,
+            timer_auto_list_state: ListState::default(),
+            timer_auto_scrollbar_state: ScrollbarState::new(1000),
+            todos,
+            todos_selected: 0,
+            todo_input: String::new(),
+            todo_editing: false,
+            todo_editing_index: None,
+            todo_next_id,
+            garden_scroll: 0,
         }
     }
 
     pub fn tick(&mut self) {
         if self.timer.tick() {
             // Session finished
-            self.plant.add_growth();
+            self.award_plant_growth();
             self.statistics.total_sessions += 1;
             let minutes = self.timer.session_type.duration_minutes(&self.settings);
             self.statistics.total_minutes += minutes;
             let today = Local::now();
             // Update recent_sessions
-            if let Some((_, count)) = self.statistics.recent_sessions.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
+            if let Some((_, count)) = self
+                .statistics
+                .recent_sessions
+                .iter_mut()
+                .find(|(d, _)| d.date_naive() == today.date_naive())
+            {
                 *count += 1;
             } else {
                 self.statistics.recent_sessions.push((today, 1));
             }
             // Update recent_minutes
-            if let Some((_, mins)) = self.statistics.recent_minutes.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
+            if let Some((_, mins)) = self
+                .statistics
+                .recent_minutes
+                .iter_mut()
+                .find(|(d, _)| d.date_naive() == today.date_naive())
+            {
                 *mins += minutes;
             } else {
                 self.statistics.recent_minutes.push((today, minutes));
@@ -122,13 +139,23 @@ impl App {
                     self.statistics.total_focus_sessions += 1;
                     self.statistics.total_focus_minutes += minutes;
                     // Update recent_focus_sessions
-                    if let Some((_, count)) = self.statistics.recent_focus_sessions.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
+                    if let Some((_, count)) = self
+                        .statistics
+                        .recent_focus_sessions
+                        .iter_mut()
+                        .find(|(d, _)| d.date_naive() == today.date_naive())
+                    {
                         *count += 1;
                     } else {
                         self.statistics.recent_focus_sessions.push((today, 1));
                     }
                     // Update recent_focus_minutes
-                    if let Some((_, mins)) = self.statistics.recent_focus_minutes.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
+                    if let Some((_, mins)) = self
+                        .statistics
+                        .recent_focus_minutes
+                        .iter_mut()
+                        .find(|(d, _)| d.date_naive() == today.date_naive())
+                    {
                         *mins += minutes;
                     } else {
                         self.statistics.recent_focus_minutes.push((today, minutes));
@@ -138,36 +165,37 @@ impl App {
                     self.statistics.total_break_sessions += 1;
                     self.statistics.total_break_minutes += minutes;
                     // Update recent_break_sessions
-                    if let Some((_, count)) = self.statistics.recent_break_sessions.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
+                    if let Some((_, count)) = self
+                        .statistics
+                        .recent_break_sessions
+                        .iter_mut()
+                        .find(|(d, _)| d.date_naive() == today.date_naive())
+                    {
                         *count += 1;
                     } else {
                         self.statistics.recent_break_sessions.push((today, 1));
                     }
                     // Update recent_break_minutes
-                    if let Some((_, mins)) = self.statistics.recent_break_minutes.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
+                    if let Some((_, mins)) = self
+                        .statistics
+                        .recent_break_minutes
+                        .iter_mut()
+                        .find(|(d, _)| d.date_naive() == today.date_naive())
+                    {
                         *mins += minutes;
                     } else {
                         self.statistics.recent_break_minutes.push((today, minutes));
                     }
                 }
             }
-            if self.plant.is_complete() {
-                self.garden.add_completed_plant(self.plant.clone());
-                self.plant = Plant::new();
-                self.statistics.completed_plants += 1;
-                // Update recent_plants
-                if let Some((_, count)) = self.statistics.recent_plants.iter_mut().find(|(d, _)| d.date_naive() == today.date_naive()) {
-                    *count += 1;
-                } else {
-                    self.statistics.recent_plants.push((today, 1));
-                }
-            }
             self.garden.update_streaks(&self.statistics.recent_sessions);
-            self.statistics.session_log.push(crate::storage::SessionLog {
-                session_type: self.timer.session_type,
-                duration: minutes,
-                end_time: Local::now(),
-            });
+            self.statistics
+                .session_log
+                .push(crate::storage::SessionLog {
+                    session_type: self.timer.session_type,
+                    duration: minutes,
+                    end_time: Local::now(),
+                });
             if self.statistics.session_log.len() > 100 {
                 self.statistics.session_log.remove(0);
             }
@@ -175,7 +203,8 @@ impl App {
             if let Some(idx) = self.timer.auto_run_index {
                 if idx + 1 < self.timer.auto_run.len() {
                     self.timer.auto_run_index = Some(idx + 1);
-                    self.timer.switch_session(self.timer.auto_run[idx + 1], &self.settings);
+                    self.timer
+                        .switch_session(self.timer.auto_run[idx + 1], &self.settings);
                     self.timer.start();
                 } else {
                     self.timer.auto_run_index = None;
@@ -186,16 +215,15 @@ impl App {
 
     pub fn handle_input(&mut self, action: InputAction) {
         match action {
-            InputAction::Tab(n) => {
-                match n {
-                    1 => self.tab = Tab::Timer,
-                    2 => self.tab = Tab::Plant,
-                    3 => self.tab = Tab::Stats,
-                    4 => self.tab = Tab::Settings,
-                    5 => self.tab = Tab::Todos,
-                    _ => {}
-                }
-            }
+            InputAction::Tab(n) => match n {
+                1 => self.tab = Tab::Timer,
+                2 => self.tab = Tab::Todos,
+                3 => self.tab = Tab::Garden,
+                4 => self.tab = Tab::Plant,
+                5 => self.tab = Tab::Stats,
+                6 => self.tab = Tab::Settings,
+                _ => {}
+            },
             InputAction::Left => {
                 self.focus = Focus::Left;
             }
@@ -210,7 +238,11 @@ impl App {
             }
             InputAction::Space => {
                 if self.tab == Tab::Timer && self.focus == Focus::Left {
-                    let sessions = [SessionType::Focus, SessionType::ShortBreak, SessionType::LongBreak];
+                    let sessions = [
+                        SessionType::Focus,
+                        SessionType::ShortBreak,
+                        SessionType::LongBreak,
+                    ];
                     let selected_session = sessions[self.timer_selected_session];
                     if self.timer.session_type == selected_session {
                         match self.timer.state {
@@ -223,28 +255,31 @@ impl App {
                         self.timer.switch_session(selected_session, &self.settings);
                         self.timer.start();
                     }
-             } else {
-                 // Logic for right focus - start selected auto-run session
-                 if !self.timer.auto_run.is_empty() && self.timer_selected_auto < self.timer.auto_run.len() {
-                     let selected_session = self.timer.auto_run[self.timer_selected_auto];
-                     if self.timer.session_type == selected_session {
-                         match self.timer.state {
-                             crate::timer::TimerState::Idle => {
-                                 self.timer.start();
-                                 self.timer.auto_run_index = Some(self.timer_selected_auto);
-                             }
-                             crate::timer::TimerState::Running => self.timer.pause(),
-                             crate::timer::TimerState::Paused => self.timer.resume(),
-                             _ => {}
-                         }
-                     } else {
-                         self.timer.switch_session(selected_session, &self.settings);
-                         self.timer.start();
-                         self.timer.auto_run_index = Some(self.timer_selected_auto);
-                     }
-                 }
-             }
-             self.timer_auto_list_state.select(Some(self.timer_selected_auto));
+                } else {
+                    // Logic for right focus - start selected auto-run session
+                    if !self.timer.auto_run.is_empty()
+                        && self.timer_selected_auto < self.timer.auto_run.len()
+                    {
+                        let selected_session = self.timer.auto_run[self.timer_selected_auto];
+                        if self.timer.session_type == selected_session {
+                            match self.timer.state {
+                                crate::timer::TimerState::Idle => {
+                                    self.timer.start();
+                                    self.timer.auto_run_index = Some(self.timer_selected_auto);
+                                }
+                                crate::timer::TimerState::Running => self.timer.pause(),
+                                crate::timer::TimerState::Paused => self.timer.resume(),
+                                _ => {}
+                            }
+                        } else {
+                            self.timer.switch_session(selected_session, &self.settings);
+                            self.timer.start();
+                            self.timer.auto_run_index = Some(self.timer_selected_auto);
+                        }
+                    }
+                }
+                self.timer_auto_list_state
+                    .select(Some(self.timer_selected_auto));
             }
             InputAction::Stop => {
                 if self.tab == Tab::Timer {
@@ -252,52 +287,89 @@ impl App {
                 }
             }
             InputAction::Quit => self.should_quit = true,
-             InputAction::Enter => {
-                 if self.tab == Tab::Timer && self.focus == Focus::Left {
-                     let sessions = [SessionType::Focus, SessionType::ShortBreak, SessionType::LongBreak];
-                     if self.timer_selected_session < sessions.len() {
-                         self.timer.add_to_auto_run(sessions[self.timer_selected_session]);
-                         self.timer_selected_auto = self.timer.auto_run.len() - 1;
-                         self.timer_auto_list_state.select(Some(self.timer_selected_auto));
-                     }
-                 } else if self.tab == Tab::Todos && !self.todos.is_empty() && self.todos_selected < self.todos.len() {
-                     self.todos[self.todos_selected].completed = !self.todos[self.todos_selected].completed;
-                     self.save();
-                 }
-             }
-             InputAction::Delete => {
-                 if self.tab == Tab::Timer && self.focus == Focus::Right && !self.timer.auto_run.is_empty() && self.timer_selected_auto < self.timer.auto_run.len() {
-                     self.timer.auto_run.remove(self.timer_selected_auto);
-                     if let Some(idx) = self.timer.auto_run_index {
-                         if idx == self.timer_selected_auto {
-                             self.timer.auto_run_index = None;
-                         } else if idx > self.timer_selected_auto {
-                             self.timer.auto_run_index = Some(idx - 1);
-                         }
-                     }
-                     if self.timer_selected_auto >= self.timer.auto_run.len() && self.timer_selected_auto > 0 {
-                         self.timer_selected_auto -= 1;
-                     }
-                     self.timer_auto_list_state.select(Some(self.timer_selected_auto));
-                 } else if self.tab == Tab::Todos && !self.todos.is_empty() && self.todos_selected < self.todos.len() {
-                     self.todos.remove(self.todos_selected);
-                     if self.todos_selected >= self.todos.len() && self.todos_selected > 0 {
-                         self.todos_selected -= 1;
-                     }
-                     self.save();
-                 }
-             }
-             InputAction::NewTodo => {
-                 if self.tab == Tab::Todos {
-                     self.todo_editing = true;
-                 }
-             }
-             InputAction::Escape => {
-                 if self.todo_editing {
-                     self.todo_input.clear();
-                     self.todo_editing = false;
-                 }
-             }
+            InputAction::Enter => {
+                if self.tab == Tab::Timer && self.focus == Focus::Left {
+                    let sessions = [
+                        SessionType::Focus,
+                        SessionType::ShortBreak,
+                        SessionType::LongBreak,
+                    ];
+                    if self.timer_selected_session < sessions.len() {
+                        self.timer
+                            .add_to_auto_run(sessions[self.timer_selected_session]);
+                        self.timer_selected_auto = self.timer.auto_run.len() - 1;
+                        self.timer_auto_list_state
+                            .select(Some(self.timer_selected_auto));
+                    }
+                } else if self.tab == Tab::Todos
+                    && !self.todos.is_empty()
+                    && self.todos_selected < self.todos.len()
+                {
+                    let was_completed = self.todos[self.todos_selected].completed;
+                    self.todos[self.todos_selected].completed = !was_completed;
+                    if !was_completed {
+                        let title = self.todos[self.todos_selected].title.clone();
+                        self.garden.add_flower_entry(&title);
+                    }
+                    self.save();
+                }
+            }
+            InputAction::Delete => {
+                if self.tab == Tab::Timer
+                    && self.focus == Focus::Right
+                    && !self.timer.auto_run.is_empty()
+                    && self.timer_selected_auto < self.timer.auto_run.len()
+                {
+                    self.timer.auto_run.remove(self.timer_selected_auto);
+                    if let Some(idx) = self.timer.auto_run_index {
+                        if idx == self.timer_selected_auto {
+                            self.timer.auto_run_index = None;
+                        } else if idx > self.timer_selected_auto {
+                            self.timer.auto_run_index = Some(idx - 1);
+                        }
+                    }
+                    if self.timer_selected_auto >= self.timer.auto_run.len()
+                        && self.timer_selected_auto > 0
+                    {
+                        self.timer_selected_auto -= 1;
+                    }
+                    self.timer_auto_list_state
+                        .select(Some(self.timer_selected_auto));
+                } else if self.tab == Tab::Todos
+                    && !self.todos.is_empty()
+                    && self.todos_selected < self.todos.len()
+                {
+                    self.todos.remove(self.todos_selected);
+                    if self.todos_selected >= self.todos.len() && self.todos_selected > 0 {
+                        self.todos_selected -= 1;
+                    }
+                    self.save();
+                }
+            }
+            InputAction::NewTodo => {
+                if self.tab == Tab::Todos {
+                    self.todo_input.clear();
+                    self.todo_editing_index = None;
+                    self.todo_editing = true;
+                }
+            }
+            InputAction::EditTodo => {
+                if self.tab == Tab::Todos
+                    && !self.todos.is_empty()
+                    && self.todos_selected < self.todos.len()
+                {
+                    self.todo_input = self.todos[self.todos_selected].title.clone();
+                    self.todo_editing_index = Some(self.todos_selected);
+                    self.todo_editing = true;
+                }
+            }
+            InputAction::Escape => {
+                if self.todo_editing {
+                    self.todo_input.clear();
+                    self.todo_editing_index = None;
+                    self.todo_editing = false;
+                }
+            }
         }
     }
 
@@ -306,20 +378,26 @@ impl App {
             KeyCode::Enter => {
                 let title = self.todo_input.trim().to_string();
                 if !title.is_empty() {
-                    self.todos.push(Todo {
-                        id: self.todo_next_id,
-                        title,
-                        completed: false,
-                    });
-                    self.todo_next_id += 1;
-                    self.todos_selected = self.todos.len() - 1;
+                    if let Some(idx) = self.todo_editing_index {
+                        self.todos[idx].title = title;
+                    } else {
+                        self.todos.push(Todo {
+                            id: self.todo_next_id,
+                            title,
+                            completed: false,
+                        });
+                        self.todo_next_id += 1;
+                        self.todos_selected = self.todos.len() - 1;
+                    }
                     self.save();
                 }
                 self.todo_input.clear();
+                self.todo_editing_index = None;
                 self.todo_editing = false;
             }
             KeyCode::Esc => {
                 self.todo_input.clear();
+                self.todo_editing_index = None;
                 self.todo_editing = false;
             }
             KeyCode::Backspace => {
@@ -341,7 +419,8 @@ impl App {
                     }
                 } else if self.timer_selected_auto > 0 {
                     self.timer_selected_auto -= 1;
-                    self.timer_auto_list_state.select(Some(self.timer_selected_auto));
+                    self.timer_auto_list_state
+                        .select(Some(self.timer_selected_auto));
                 }
             }
             Tab::Settings => {
@@ -363,6 +442,11 @@ impl App {
                     self.todos_selected -= 1;
                 }
             }
+            Tab::Garden => {
+                if self.garden_scroll > 0 {
+                    self.garden_scroll -= 1;
+                }
+            }
             _ => {}
         }
     }
@@ -377,7 +461,8 @@ impl App {
                     }
                 } else if self.timer_selected_auto < self.timer.auto_run.len().saturating_sub(1) {
                     self.timer_selected_auto += 1;
-                    self.timer_auto_list_state.select(Some(self.timer_selected_auto));
+                    self.timer_auto_list_state
+                        .select(Some(self.timer_selected_auto));
                 }
             }
             Tab::Settings => {
@@ -401,33 +486,86 @@ impl App {
                     self.todos_selected += 1;
                 }
             }
+            Tab::Garden => {
+                self.garden_scroll += 1; // clamped by the UI renderer
+            }
             _ => {}
+        }
+    }
+
+    fn award_plant_growth(&mut self) {
+        self.plant.add_growth();
+        if self.plant.is_complete() {
+            let today = Local::now();
+            self.garden.add_completed_plant(self.plant.clone());
+            self.garden.add_plant_entry();
+            self.plant = Plant::new();
+            self.statistics.completed_plants += 1;
+            if let Some((_, count)) = self
+                .statistics
+                .recent_plants
+                .iter_mut()
+                .find(|(d, _)| d.date_naive() == today.date_naive())
+            {
+                *count += 1;
+            } else {
+                self.statistics.recent_plants.push((today, 1));
+            }
         }
     }
 
     fn adjust_setting(&mut self, delta: i64) {
         match self.settings_selected {
-            0 => { // Focus
-                self.settings.focus_duration = (self.settings.focus_duration as i64 + delta).clamp(1, 60) as u64;
+            0 => {
+                // Focus
+                self.settings.focus_duration =
+                    (self.settings.focus_duration as i64 + delta).clamp(1, 60) as u64;
                 if self.timer.session_type == SessionType::Focus {
                     self.timer.set_session(SessionType::Focus, &self.settings);
                 }
             }
-            1 => { // Short break
-                self.settings.short_break_duration = (self.settings.short_break_duration as i64 + delta).clamp(1, 60) as u64;
+            1 => {
+                // Short break
+                self.settings.short_break_duration =
+                    (self.settings.short_break_duration as i64 + delta).clamp(1, 60) as u64;
                 if self.timer.session_type == SessionType::ShortBreak {
-                    self.timer.set_session(SessionType::ShortBreak, &self.settings);
+                    self.timer
+                        .set_session(SessionType::ShortBreak, &self.settings);
                 }
             }
-            2 => { // Long break
-                self.settings.long_break_duration = (self.settings.long_break_duration as i64 + delta).clamp(1, 60) as u64;
+            2 => {
+                // Long break
+                self.settings.long_break_duration =
+                    (self.settings.long_break_duration as i64 + delta).clamp(1, 60) as u64;
                 if self.timer.session_type == SessionType::LongBreak {
-                    self.timer.set_session(SessionType::LongBreak, &self.settings);
+                    self.timer
+                        .set_session(SessionType::LongBreak, &self.settings);
                 }
             }
-            3 => { // Theme
-                let themes = [ThemeVariant::System, ThemeVariant::RosePineDawn, ThemeVariant::RosePine, ThemeVariant::GruvboxDark, ThemeVariant::GruvboxLight, ThemeVariant::SolarizedDark, ThemeVariant::SolarizedLight, ThemeVariant::Nord, ThemeVariant::TokyoNight, ThemeVariant::Monokai, ThemeVariant::Vesper, ThemeVariant::Everforest, ThemeVariant::CatppuccinLatte, ThemeVariant::CatppuccinFrappe, ThemeVariant::CatppuccinMacchiato, ThemeVariant::CatppuccinMocha];
-                let current = themes.iter().position(|&t| t == self.settings.theme).unwrap_or(0);
+            3 => {
+                // Theme
+                let themes = [
+                    ThemeVariant::System,
+                    ThemeVariant::RosePineDawn,
+                    ThemeVariant::RosePine,
+                    ThemeVariant::GruvboxDark,
+                    ThemeVariant::GruvboxLight,
+                    ThemeVariant::SolarizedDark,
+                    ThemeVariant::SolarizedLight,
+                    ThemeVariant::Nord,
+                    ThemeVariant::TokyoNight,
+                    ThemeVariant::Monokai,
+                    ThemeVariant::Vesper,
+                    ThemeVariant::Everforest,
+                    ThemeVariant::CatppuccinLatte,
+                    ThemeVariant::CatppuccinFrappe,
+                    ThemeVariant::CatppuccinMacchiato,
+                    ThemeVariant::CatppuccinMocha,
+                ];
+                let current = themes
+                    .iter()
+                    .position(|&t| t == self.settings.theme)
+                    .unwrap_or(0);
                 let new_index = (current as i64 - delta).rem_euclid(themes.len() as i64) as usize;
                 self.settings.theme = themes[new_index];
                 self.theme = Theme::new(self.settings.theme);
@@ -453,7 +591,9 @@ impl App {
             auto_run: self.timer.auto_run.clone(),
             auto_run_index: self.timer.auto_run_index,
             todos: self.todos.clone(),
+            garden_entries: self.garden.entries.clone(),
         };
         save_data(&data);
     }
 }
+

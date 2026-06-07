@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use crate::timer::SessionType;
-use crate::garden::CompletedPlant;
+use crate::garden::{CompletedPlant, GardenEntry};
 use crate::todo::Todo;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -71,6 +71,8 @@ pub struct Data {
     pub auto_run_index: Option<usize>,
     #[serde(default)]
     pub todos: Vec<Todo>,
+    #[serde(default)]
+    pub garden_entries: Vec<GardenEntry>,
 }
 
 

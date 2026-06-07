@@ -1,15 +1,32 @@
 use chrono::{DateTime, NaiveDate, Utc, Duration};
 use crate::plant::Plant;
 
+const FLOWER_EMOJIS: &[&str] = &["🌸", "🌺", "🌻", "🌹", "🌷", "🪷", "🌼", "💐"];
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CompletedPlant {
     pub plant: Plant,
     pub completed_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum GardenEntryKind {
+    Plant,
+    Flower,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GardenEntry {
+    pub kind: GardenEntryKind,
+    pub label: String,
+    pub emoji: String,
+    pub completed_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Garden {
     pub completed_plants: Vec<CompletedPlant>,
+    pub entries: Vec<GardenEntry>,
     pub current_streak: u32,
     pub longest_streak: u32,
     pub current_streak_start_date: Option<DateTime<Utc>>,
@@ -22,6 +39,7 @@ impl Garden {
     pub fn new() -> Self {
         Garden {
             completed_plants: vec![],
+            entries: vec![],
             current_streak: 0,
             longest_streak: 0,
             current_streak_start_date: None,
@@ -37,6 +55,25 @@ impl Garden {
             completed_at: Utc::now(),
         };
         self.completed_plants.push(completed);
+    }
+
+    pub fn add_flower_entry(&mut self, title: &str) {
+        let emoji = FLOWER_EMOJIS[self.entries.len() % FLOWER_EMOJIS.len()].to_string();
+        self.entries.push(GardenEntry {
+            kind: GardenEntryKind::Flower,
+            label: title.to_string(),
+            emoji,
+            completed_at: Utc::now(),
+        });
+    }
+
+    pub fn add_plant_entry(&mut self) {
+        self.entries.push(GardenEntry {
+            kind: GardenEntryKind::Plant,
+            label: "Fully Grown Plant".to_string(),
+            emoji: "🪴".to_string(),
+            completed_at: Utc::now(),
+        });
     }
 
 
@@ -62,21 +99,17 @@ impl Garden {
         let today = Local::now().date_naive();
         let yesterday = today - Duration::days(1);
         let last_date = *dates.last().unwrap();
-        let mut current_streak = 0;
-        let mut current_dates = vec![];
-        if last_date == today || last_date == yesterday {
+        let (current_streak, current_dates) = if last_date == today || last_date == yesterday {
             // find the group ending with last_date
             let mut i = dates.len() - 1;
             while i > 0 && dates[i] == dates[i - 1] + Duration::days(1) {
                 i -= 1;
             }
-            current_dates = dates[i..].to_vec();
-            current_streak = current_dates.len() as u32;
+            let current_dates = dates[i..].to_vec();
+            (current_dates.len() as u32, current_dates)
         } else {
-            // last_date < yesterday, reset
-            current_streak = 0;
-            current_dates = vec![];
-        }
+            (0, vec![])
+        };
         self.current_streak = current_streak;
         self.current_streak_dates = current_dates;
         if current_streak > 0 {

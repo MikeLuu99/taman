@@ -3,3 +3,4 @@ pub mod plant_ui;
 pub mod stats_ui;
 pub mod settings_ui;
 pub mod todos_ui;
+pub mod garden_ui;
