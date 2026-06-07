@@ -1,10 +1,12 @@
 use chrono::Local;
+use crossterm::event::{KeyCode, KeyEvent};
 use crate::garden::Garden;
 use crate::input::InputAction;
 use crate::plant::Plant;
 use crate::storage::{load_data, save_data, Data, Settings, Statistics};
 use crate::theme::{Theme, ThemeVariant};
 use crate::timer::{SessionType, Timer};
+use crate::todo::Todo;
 use ratatui::widgets::{ListState, ScrollbarState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +15,7 @@ pub enum Tab {
     Plant,
     Stats,
     Settings,
+    Todos,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +42,12 @@ pub struct App {
     pub should_quit: bool,
     pub timer_auto_list_state: ListState,
     pub timer_auto_scrollbar_state: ScrollbarState,
+    // Todos
+    pub todos: Vec<Todo>,
+    pub todos_selected: usize,
+    pub todo_input: String,
+    pub todo_editing: bool,
+    pub todo_next_id: u64,
 }
 
 impl App {
@@ -61,6 +70,8 @@ impl App {
         garden.update_streaks(&data.statistics.recent_sessions);
         let statistics = data.statistics;
         let theme = Theme::new(settings.theme);
+        let todos = data.todos.clone();
+        let todo_next_id = todos.iter().map(|t| t.id + 1).max().unwrap_or(0);
 
         App {
             tab: Tab::Timer,
@@ -78,6 +89,11 @@ impl App {
              should_quit: false,
              timer_auto_list_state: ListState::default(),
              timer_auto_scrollbar_state: ScrollbarState::new(1000),
+             todos,
+             todos_selected: 0,
+             todo_input: String::new(),
+             todo_editing: false,
+             todo_next_id,
         }
     }
 
@@ -176,6 +192,7 @@ impl App {
                     2 => self.tab = Tab::Plant,
                     3 => self.tab = Tab::Stats,
                     4 => self.tab = Tab::Settings,
+                    5 => self.tab = Tab::Todos,
                     _ => {}
                 }
             }
@@ -243,6 +260,9 @@ impl App {
                          self.timer_selected_auto = self.timer.auto_run.len() - 1;
                          self.timer_auto_list_state.select(Some(self.timer_selected_auto));
                      }
+                 } else if self.tab == Tab::Todos && !self.todos.is_empty() && self.todos_selected < self.todos.len() {
+                     self.todos[self.todos_selected].completed = !self.todos[self.todos_selected].completed;
+                     self.save();
                  }
              }
              InputAction::Delete => {
@@ -259,8 +279,56 @@ impl App {
                          self.timer_selected_auto -= 1;
                      }
                      self.timer_auto_list_state.select(Some(self.timer_selected_auto));
+                 } else if self.tab == Tab::Todos && !self.todos.is_empty() && self.todos_selected < self.todos.len() {
+                     self.todos.remove(self.todos_selected);
+                     if self.todos_selected >= self.todos.len() && self.todos_selected > 0 {
+                         self.todos_selected -= 1;
+                     }
+                     self.save();
                  }
              }
+             InputAction::NewTodo => {
+                 if self.tab == Tab::Todos {
+                     self.todo_editing = true;
+                 }
+             }
+             InputAction::Escape => {
+                 if self.todo_editing {
+                     self.todo_input.clear();
+                     self.todo_editing = false;
+                 }
+             }
+        }
+    }
+
+    pub fn handle_todo_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter => {
+                let title = self.todo_input.trim().to_string();
+                if !title.is_empty() {
+                    self.todos.push(Todo {
+                        id: self.todo_next_id,
+                        title,
+                        completed: false,
+                    });
+                    self.todo_next_id += 1;
+                    self.todos_selected = self.todos.len() - 1;
+                    self.save();
+                }
+                self.todo_input.clear();
+                self.todo_editing = false;
+            }
+            KeyCode::Esc => {
+                self.todo_input.clear();
+                self.todo_editing = false;
+            }
+            KeyCode::Backspace => {
+                self.todo_input.pop();
+            }
+            KeyCode::Char(c) => {
+                self.todo_input.push(c);
+            }
+            _ => {}
         }
     }
 
@@ -288,6 +356,11 @@ impl App {
             Tab::Stats => {
                 if self.stats_selected > 0 {
                     self.stats_selected -= 1;
+                }
+            }
+            Tab::Todos => {
+                if self.todos_selected > 0 {
+                    self.todos_selected -= 1;
                 }
             }
             _ => {}
@@ -321,6 +394,11 @@ impl App {
                 let max = 8; // 9 categories
                 if self.stats_selected < max {
                     self.stats_selected += 1;
+                }
+            }
+            Tab::Todos => {
+                if self.todos_selected < self.todos.len().saturating_sub(1) {
+                    self.todos_selected += 1;
                 }
             }
             _ => {}
@@ -374,6 +452,7 @@ impl App {
             completed_plants: self.garden.completed_plants.clone(),
             auto_run: self.timer.auto_run.clone(),
             auto_run_index: self.timer.auto_run_index,
+            todos: self.todos.clone(),
         };
         save_data(&data);
     }

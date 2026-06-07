@@ -5,6 +5,7 @@ mod plant;
 mod storage;
 mod theme;
 mod timer;
+mod todo;
 mod ui;
 
 use std::io;
@@ -20,7 +21,7 @@ use ratatui::text::Line;
 
 use crate::app::{App, Tab};
 use crate::input::handle_key;
-use crate::ui::{plant_ui, stats_ui, settings_ui, timer_ui};
+use crate::ui::{plant_ui, stats_ui, settings_ui, timer_ui, todos_ui};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
@@ -53,12 +54,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Line::from("🌱 Plant [2]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
                 Line::from("📊 Stats [3]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
                 Line::from("⚙️ Settings [4]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
+                Line::from("✅ Todos [5]").style(ratatui::style::Style::default().fg(app.theme.blocks)),
             ])
             .select(match app.tab {
                 Tab::Timer => 0,
                 Tab::Plant => 1,
                 Tab::Stats => 2,
                 Tab::Settings => 3,
+                Tab::Todos => 4,
             })
             .style(ratatui::style::Style::default().fg(app.theme.tabs))
             .highlight_style(ratatui::style::Style::default().fg(app.theme.highlight).add_modifier(ratatui::style::Modifier::BOLD));
@@ -70,6 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Tab::Plant => plant_ui::draw_plant(f, &app, chunks[1]),
                 Tab::Stats => stats_ui::draw_stats(f, &app, chunks[1]),
                 Tab::Settings => settings_ui::draw_settings(f, &app, chunks[1]),
+                Tab::Todos => todos_ui::draw_todos(f, &mut app, chunks[1]),
             }
 
             // Footer: Status and hints
@@ -78,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Tab::Plant => "Quit [Q]",
                 Tab::Stats => "Quit [Q]",
                 Tab::Settings => "Switch Blocks [←/→] | Select/Adjust [↑/↓] | Quit [Q]",
+                Tab::Todos => "Add [N] | Toggle Done [Enter] | Delete [Del] | Navigate [↑/↓] | Quit [Q]",
             };
             let footer = ratatui::widgets::Paragraph::new(footer_text)
                 .style(ratatui::style::Style::default().fg(app.theme.secondary_text));
@@ -87,7 +92,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Handle events
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                if let Some(action) = handle_key(key) {
+                if app.todo_editing {
+                    app.handle_todo_key(key);
+                } else if let Some(action) = handle_key(key) {
                     app.handle_input(action);
                 }
             }
